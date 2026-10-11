@@ -5,6 +5,7 @@ pipeline {
     environment {
         APP_NAME = 'FlaskPractice'
         STAGING_DIR = 'staging'
+        PYTHON_PACKAGES = '.python-packages'
     }
 
     stages {
@@ -12,28 +13,48 @@ pipeline {
             steps {
                 echo 'Checking out Flask application source code'
                 checkout scm
+
+                sh '''
+                    echo "Current workspace: $WORKSPACE"
+                    echo "Repository files:"
+                    ls -la
+                '''
             }
         }
 
         stage('Build') {
             steps {
                 echo 'Checking Python installation'
+
                 sh '''
                     python3 --version
                     python3 -m pip --version
+
+                    if [ ! -f requirements.txt ]; then
+                        echo "ERROR: requirements.txt was not found."
+                        exit 1
+                    fi
                 '''
 
-                echo 'Installing application dependencies'
+                echo 'Installing dependencies into the workspace'
+
                 sh '''
-                    python3 -m pip install --user -r requirements.txt
+                    mkdir -p "$WORKSPACE/$PYTHON_PACKAGES"
+
+                    python3 -m pip install \
+                        --target "$WORKSPACE/$PYTHON_PACKAGES" \
+                        -r requirements.txt
                 '''
             }
         }
 
         stage('Test') {
             steps {
-                echo 'Running application tests'
+                echo 'Running Flask application tests'
+
                 sh '''
+                    export PYTHONPATH="$WORKSPACE/$PYTHON_PACKAGES${PYTHONPATH:+:$PYTHONPATH}"
+
                     python3 -m pytest
                 '''
             }
@@ -44,17 +65,18 @@ pipeline {
                 echo 'Preparing staging deployment'
 
                 sh '''
-                    mkdir -p "$STAGING_DIR"
+                    mkdir -p "$WORKSPACE/$STAGING_DIR"
 
                     tar \
-                      --exclude=.git \
-                      --exclude=.venv \
-                      --exclude=__pycache__ \
-                      --exclude=staging \
-                      -cf - . | tar -xf - -C "$STAGING_DIR"
+                        --exclude='./.git' \
+                        --exclude='./.venv' \
+                        --exclude='./.python-packages' \
+                        --exclude="./$STAGING_DIR" \
+                        --exclude='./__pycache__' \
+                        -cf - . | tar -xf - -C "$WORKSPACE/$STAGING_DIR"
 
-                    echo "Application files copied to staging directory"
-                    ls -la "$STAGING_DIR"
+                    echo "Staging files prepared:"
+                    ls -la "$WORKSPACE/$STAGING_DIR"
                 '''
             }
         }
@@ -73,7 +95,7 @@ Job: ${env.JOB_NAME}
 Build Number: ${env.BUILD_NUMBER}
 Build URL: ${env.BUILD_URL}
 
-The Flask application passed the pipeline stages."""
+The Flask application completed the configured pipeline stages."""
             )
         }
 
@@ -89,7 +111,7 @@ Job: ${env.JOB_NAME}
 Build Number: ${env.BUILD_NUMBER}
 Build URL: ${env.BUILD_URL}
 
-Please open the Jenkins Console Output to investigate the failure."""
+Please check the Jenkins Console Output for the error details."""
             )
         }
 
