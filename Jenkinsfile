@@ -1,77 +1,100 @@
+
 pipeline {
     agent any
-    options {
-        timestamps()
+
+    environment {
+        APP_NAME = 'FlaskPractice'
+        STAGING_DIR = 'staging'
     }
-    pipeline {
-        agent any
-        stages {
-            stage('Build') {
-                steps {
-                    sh '''
+
+    stages {
+        stage('Checkout') {
+            steps {
+                echo 'Checking out Flask application source code'
+                checkout scm
+            }
+        }
+
+        stage('Build') {
+            steps {
+                echo 'Checking Python installation'
+                sh '''
                     python3 --version
                     python3 -m pip --version
+                '''
+
+                echo 'Installing application dependencies'
+                sh '''
                     python3 -m pip install --user -r requirements.txt
-                    '''
-                }
+                '''
             }
-            stage('Test') {
-                steps {
-                    sh '''
+        }
+
+        stage('Test') {
+            steps {
+                echo 'Running application tests'
+                sh '''
                     python3 -m pytest
-                    '''
-                }
+                '''
             }
-            stage('Deploy') {
-                steps {
-                    echo 'Deployment stage started'
-                }
+        }
+
+        stage('Deploy') {
+            steps {
+                echo 'Preparing staging deployment'
+
+                sh '''
+                    mkdir -p "$STAGING_DIR"
+
+                    tar \
+                      --exclude=.git \
+                      --exclude=.venv \
+                      --exclude=__pycache__ \
+                      --exclude=staging \
+                      -cf - . | tar -xf - -C "$STAGING_DIR"
+
+                    echo "Application files copied to staging directory"
+                    ls -la "$STAGING_DIR"
+                '''
             }
         }
     }
-    stage('Deploy to Staging') {
-        steps {
-            sh '''
-            set -eu
-            STAGING_DIR="$WORKSPACE/staging"
-            mkdir -p "$STAGING_DIR"
-            tar \
-            --exclude=.git \
-            --exclude=.venv \
-            --exclude=staging \
-            --exclude=__pycache__ \
-            --exclude=.pytest_cache \
-            -cf - . | \
-            (cd "$STAGING_DIR" && tar -xf -)
-            echo "Application copied to: $STAGING_DIR"
-            '''
+
+    post {
+        success {
+            echo 'CI/CD pipeline completed successfully'
+
+            emailext(
+                to: 'chandhinishrivs@gmail.com',
+                subject: "SUCCESS: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """Build succeeded.
+
+Job: ${env.JOB_NAME}
+Build Number: ${env.BUILD_NUMBER}
+Build URL: ${env.BUILD_URL}
+
+The Flask application passed the pipeline stages."""
+            )
+        }
+
+        failure {
+            echo 'CI/CD pipeline failed'
+
+            emailext(
+                to: 'chandhinishrivs@gmail.com',
+                subject: "FAILURE: ${env.JOB_NAME} #${env.BUILD_NUMBER}",
+                body: """Build failed.
+
+Job: ${env.JOB_NAME}
+Build Number: ${env.BUILD_NUMBER}
+Build URL: ${env.BUILD_URL}
+
+Please open the Jenkins Console Output to investigate the failure."""
+            )
+        }
+
+        always {
+            echo 'Pipeline execution finished'
         }
     }
-}
-post {
-    success {
-        echo 'Pipeline completed successfully.'
-        mail to: 'chandhinishrivs@gmail.com',
-        subject: "SUCCESS: ${
-            env.JOB_NAME
-        } #${
-            env.BUILD_NUMBER
-        }",
-        body: "Build succeeded.\nDetails: ${
-            env.BUILD_URL
-        }"
-    }
-    failure {
-        echo 'Pipeline failed. Check the console output.'
-        mail to: 'chandhinishrivs@gmail.com',
-        subject: "FAILED: ${
-            env.JOB_NAME
-        } #${
-            env.BUILD_NUMBER
-        }",
-        body: "Build failed. Check the console output.\nDetails: ${
-            env.BUILD_URL
-        }"
-    }
-}
 }
