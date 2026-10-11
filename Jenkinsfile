@@ -79,7 +79,7 @@ pipeline {
             echo 'CI/CD pipeline completed successfully'
             emailext(
             to: 'chandhinishrivs@gmail.com',
-            subject: "SUCCESS: ${
+            subject: """SUCCESS: ${
                 env.JOB_NAME
             } #${
                 env.BUILD_NUMBER
